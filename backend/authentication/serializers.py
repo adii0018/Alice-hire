@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
 
@@ -26,3 +27,34 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'email', 'username', 'created_at')
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = 'email'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Remove username field and add email field
+        self.fields['email'] = serializers.EmailField()
+        del self.fields['username']
+    
+    def validate(self, attrs):
+        # Get email and password from request
+        email = attrs.get('email')
+        password = attrs.get('password')
+        
+        # Find user by email
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({'detail': 'No user found with this email'})
+        
+        # Set username for parent validation
+        attrs['username'] = user.username
+        
+        # Call parent validate with username
+        data = super().validate(attrs)
+        
+        # Add user data to response
+        data['user'] = UserSerializer(self.user).data
+        
+        return data
