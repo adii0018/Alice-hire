@@ -5,7 +5,14 @@ const usePeerConnection = (config = {}) => {
 
   const initializePeer = useCallback((onIceCandidate, onTrack) => {
     const configuration = {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' }
+      ],
+      iceCandidatePoolSize: 10,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
       ...config
     }
 
@@ -23,12 +30,19 @@ const usePeerConnection = (config = {}) => {
       }
     }
 
+    peerRef.current.oniceconnectionstatechange = () => {
+      console.log('ICE connection state:', peerRef.current.iceConnectionState)
+    }
+
     return peerRef.current
   }, [config])
 
   const createOffer = useCallback(async () => {
     if (!peerRef.current) return null
-    const offer = await peerRef.current.createOffer()
+    const offer = await peerRef.current.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true
+    })
     await peerRef.current.setLocalDescription(offer)
     return offer
   }, [])

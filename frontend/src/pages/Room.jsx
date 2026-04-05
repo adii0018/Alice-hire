@@ -21,6 +21,14 @@ const Room = () => {
   const [config, setConfig] = useState({})
   const [isHost, setIsHost] = useState(false)
 
+  // Update remote video when stream changes
+  useEffect(() => {
+    if (remoteStream && remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = remoteStream
+      console.log('Remote video updated with stream')
+    }
+  }, [remoteStream])
+
   const { initializePeer, createOffer, createAnswer, setRemoteDesc, addIceCandidate, addTrack, close } = usePeerConnection()
 
   const handleAlert = async (alert) => {
@@ -81,15 +89,29 @@ const Room = () => {
   useEffect(() => {
     const setupMedia = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30, max: 30 },
+            facingMode: 'user'
+          }, 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        })
         setLocalStream(stream)
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream
         }
 
+        // Initialize peer connection first
         initializePeer(
           (candidate) => sendIce(candidate),
           (stream) => {
+            console.log('Remote stream received:', stream)
             setRemoteStream(stream)
             if (remoteVideoRef.current) {
               remoteVideoRef.current.srcObject = stream
@@ -97,7 +119,11 @@ const Room = () => {
           }
         )
 
-        stream.getTracks().forEach(track => addTrack(track, stream))
+        // Add tracks after peer is initialized
+        stream.getTracks().forEach(track => {
+          console.log('Adding track:', track.kind)
+          addTrack(track, stream)
+        })
       } catch (error) {
         console.error('Failed to get media:', error)
       }
@@ -111,7 +137,7 @@ const Room = () => {
       }
       close()
     }
-  }, [])
+  }, [initializePeer, addTrack, sendIce, close])
 
   const toggleMute = () => {
     if (localStream) {
@@ -150,8 +176,38 @@ const Room = () => {
         )}
       </div>
       <div style={{ flex: 1, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#000' }} />
-        <video ref={localVideoRef} autoPlay playsInline muted style={{ position: 'absolute', bottom: '20px', right: '20px', width: '240px', height: '180px', borderRadius: '8px', border: '2px solid white', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+        {remoteStream ? (
+          <video 
+            ref={remoteVideoRef} 
+            autoPlay 
+            playsInline 
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover', 
+              background: '#000' 
+            }} 
+          />
+        ) : (
+          <div style={{ color: 'white', fontSize: '18px' }}>Waiting for other participant...</div>
+        )}
+        <video 
+          ref={localVideoRef} 
+          autoPlay 
+          playsInline 
+          muted 
+          style={{ 
+            position: 'absolute', 
+            bottom: '20px', 
+            right: '20px', 
+            width: '240px', 
+            height: '180px', 
+            borderRadius: '8px', 
+            border: '2px solid white', 
+            objectFit: 'cover', 
+            transform: 'scaleX(-1)' 
+          }} 
+        />
       </div>
       <div style={{ padding: '20px', background: '#2d3748', display: 'flex', justifyContent: 'center', gap: '15px' }}>
         <button onClick={toggleMute} style={{ padding: '12px 24px', background: isMuted ? '#e53e3e' : '#4a5568', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' }}>
